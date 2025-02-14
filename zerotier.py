@@ -1,7 +1,10 @@
 import requests
 import argparse
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 import re
+from colorama import init, Fore, Back, Style
+
+init(autoreset=True)
 
 API_TOKEN = ''
 NETWORK_ID = ''
@@ -15,7 +18,7 @@ def fetch_members():
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        print(f"An error occurred: {e}")
+        print(Fore.RED + f"An error occurred: {e}")
         return []
 
 def update_member(address, name=None, description=None, authorized=None):
@@ -27,26 +30,25 @@ def update_member(address, name=None, description=None, authorized=None):
     try:
         response = requests.post(member_url, headers=headers, json=data)
         response.raise_for_status()
-        print(f"Member {address} updated successfully.")
+        print(Fore.GREEN + f"Member {address} updated successfully.")
     except requests.exceptions.RequestException as e:
-        print(f"Error updating member {address}: {e}")
+        print(Fore.RED + f"Error updating member {address}: {e}")
 
 def format_time_difference(last_seen_dt):
     delta = datetime.now(timezone.utc) - last_seen_dt
     seconds = delta.total_seconds()
-
     if seconds < 60:
-        return f"{int(seconds)} sec"
+        return Fore.CYAN + f"{int(seconds)} sec"
     elif seconds < 3600:
-        return f"{int(seconds // 60)} minute"
+        return Fore.BLUE + f"{int(seconds // 60)} min"
     elif seconds < 86400:
-        return f"{int(seconds // 3600)} hour"
+        return Fore.MAGENTA + f"{int(seconds // 3600)} hr"
     elif seconds < 2592000:
-        return f"{int(seconds // 86400)} day"
+        return Fore.YELLOW + f"{int(seconds // 86400)} day"
     elif seconds < 31104000:
-        return f"{int(seconds // 2592000)} month"
+        return Fore.MAGENTA + f"{int(seconds // 2592000)} month"
     else:
-        return f"{int(seconds // 31104000)} year"
+        return Fore.RED + f"{int(seconds // 31104000)} year"
 
 def fetch_member_info(address):
     member_url = f'{url}/{address}'
@@ -54,12 +56,13 @@ def fetch_member_info(address):
         response = requests.get(member_url, headers=headers)
         response.raise_for_status()
         member = response.json()
-        print("\nDevice Information:")
-        print(f"Address: {member.get('nodeId', 'N/A')}")
-        print(f"Name: {member.get('name', 'N/A')}")
-        print(f"Description: {member.get('description', 'N/A')}")
+        print(Back.CYAN + "\nDevice Information:")
+        print(f"{Fore.GREEN}Address: {member.get('nodeId', 'N/A')}")
+        print(f"{Fore.GREEN}Name: {member.get('name', 'N/A')}")
+        print(f"{Fore.GREEN}Description: {member.get('description', 'N/A')}")
+        print(f"{Fore.GREEN}Physical IP: {member.get('physicalAddress', 'N/A')}")
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching info for member {address}: {e}")
+        print(Fore.RED + f"Error fetching info for member {address}: {e}")
 
 def main():
     parser = argparse.ArgumentParser(description="Manage ZeroTier network members.")
@@ -79,25 +82,28 @@ def main():
         elif args.auth is not None:
             update_member(args.address, authorized=args.auth.lower() == 'true')
         else:
-            print("Specify --edit with --name/--description, --auth, or --info.")
+            print(Fore.RED + "Specify --edit with --name/--description, --auth, or --info.")
     else:
         members = fetch_members()
         if members:
-            print(f"Network ID: {NETWORK_ID}\n")
-            print(f"{'Address':<18} | {'Device Name':<25} | {'Managed IPs':<18} | {'Last Seen':<15} | {'Status':<8} | {'Version':<8} | {'Authorization':<12}")
-            print("-" * 120)
+            print(Back.BLACK + Fore.YELLOW + Style.BRIGHT + f"Network ID: {NETWORK_ID}\n")
+            print(Fore.GREEN + f"{'Address':<10} | {'Device Name':<25} | {'Managed IPs':<15} | {'Last Seen':<10} | {'Status':<7} | {'Version':<6} | {'Authorization':<15}")
+            print(Fore.GREEN + "-" * 104)
             for m in members:
                 address = m.get('nodeId', 'N/A')
                 name = m.get('name', 'N/A')
                 ips = ', '.join(m.get('config', {}).get('ipAssignments', [])) or 'N/A'
                 last_seen_dt = datetime.fromtimestamp(m.get('lastSeen', 0) / 1000, tz=timezone.utc)
                 last_seen = format_time_difference(last_seen_dt)
-                status = 'Online' if (datetime.now(timezone.utc) - last_seen_dt).total_seconds() < 600 else 'Offline'
+                status = 'Offline' if (datetime.now(timezone.utc) - last_seen_dt).total_seconds() < 600 else 'Offline'
                 version = m.get('clientVersion', 'N/A')
-                auth = 'Authorized' if m.get('config', {}).get('authorized', False) else 'Unauthorized'
-                print(f"{address:<18} | {name:<25} | {ips:<18} | {last_seen:<15} | {status:<8} | {version:<8} | {auth:<12}")
+                auth = Back.GREEN+'authorized' if m.get('config', {}).get('authorized', False) else Back.RED+'unauthorized'
+                
+                # Add stylish formatting for columns
+                print(Fore.GREEN + f"{address:<10} {Fore.GREEN}| {Fore.YELLOW}{name:<25} {Fore.GREEN}| {Fore.CYAN}{ips:<15} {Fore.GREEN}| {Fore.MAGENTA}{last_seen:<15} {Fore.GREEN}| "
+                      f"{(Fore.GREEN if status == '✔' else Fore.RED)}{status:<6} {Fore.GREEN}| {Fore.WHITE}{version:<7} {Fore.GREEN}| {Fore.WHITE if auth == '✔' else Fore.WHITE}{auth:<15}")
         else:
-            print("No members found or an error occurred.")
+            print(Fore.RED + "No members found or an error occurred.")
 
 if __name__ == '__main__':
     main()
