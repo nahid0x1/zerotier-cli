@@ -1,7 +1,6 @@
 import requests
 import argparse
 from datetime import datetime, timezone
-import re
 from colorama import init, Fore, Back, Style
 
 init(autoreset=True)
@@ -33,6 +32,15 @@ def update_member(address, name=None, description=None, authorized=None):
         print(Fore.GREEN + f"Member {address} updated successfully.")
     except requests.exceptions.RequestException as e:
         print(Fore.RED + f"Error updating member {address}: {e}")
+
+def delete_member(address):
+    member_url = f'{url}/{address}'
+    try:
+        response = requests.delete(member_url, headers=headers)
+        response.raise_for_status()
+        print(Fore.GREEN + f"Member {address} deleted successfully.")
+    except requests.exceptions.RequestException as e:
+        print(Fore.RED + f"Error deleting member {address}: {e}")
 
 def format_time_difference(last_seen_dt):
     delta = datetime.now(timezone.utc) - last_seen_dt
@@ -72,17 +80,20 @@ def main():
     parser.add_argument('--name', type=str)
     parser.add_argument('--description', type=str)
     parser.add_argument('--info', action='store_true')
+    parser.add_argument('--delete', action='store_true', help="Delete the specified member.")
     args = parser.parse_args()
 
     if args.address:
         if args.info:
             fetch_member_info(args.address)
+        elif args.delete:
+            delete_member(args.address)
         elif args.edit and (args.name or args.description):
             update_member(args.address, name=args.name, description=args.description)
         elif args.auth is not None:
             update_member(args.address, authorized=args.auth.lower() == 'true')
         else:
-            print(Fore.RED + "Specify --edit with --name/--description, --auth, or --info.")
+            print(Fore.RED + "Specify --edit with --name/--description, --auth, --info, or --delete.")
     else:
         members = fetch_members()
         if members:
@@ -95,13 +106,12 @@ def main():
                 ips = ', '.join(m.get('config', {}).get('ipAssignments', [])) or 'N/A'
                 last_seen_dt = datetime.fromtimestamp(m.get('lastSeen', 0) / 1000, tz=timezone.utc)
                 last_seen = format_time_difference(last_seen_dt)
-                status = 'Offline' if (datetime.now(timezone.utc) - last_seen_dt).total_seconds() < 600 else 'Offline'
+                status = 'Online ' if (datetime.now(timezone.utc) - last_seen_dt).total_seconds() < 600 else 'Offline'
                 version = m.get('clientVersion', 'N/A')
                 auth = Back.GREEN+'authorized' if m.get('config', {}).get('authorized', False) else Back.RED+'unauthorized'
                 
-                # Add stylish formatting for columns
                 print(Fore.GREEN + f"{address:<10} {Fore.GREEN}| {Fore.YELLOW}{name:<25} {Fore.GREEN}| {Fore.CYAN}{ips:<15} {Fore.GREEN}| {Fore.MAGENTA}{last_seen:<15} {Fore.GREEN}| "
-                      f"{(Fore.GREEN if status == '✔' else Fore.RED)}{status:<6} {Fore.GREEN}| {Fore.WHITE}{version:<7} {Fore.GREEN}| {Fore.WHITE if auth == '✔' else Fore.WHITE}{auth:<15}")
+                      f"{(Fore.GREEN if status == 'Online ' else Fore.RED)}{status:<6} {Fore.GREEN}| {Fore.WHITE}{version:<7} {Fore.GREEN}| {Fore.WHITE if auth == 'authorized' else Fore.WHITE}{auth:<15}")
         else:
             print(Fore.RED + "No members found or an error occurred.")
 
